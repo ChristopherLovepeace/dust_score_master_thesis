@@ -1,0 +1,9 @@
+# Ignore compiled Python files
+.pyc
+__pycache__
+
+# Ignore hdf files
+.hdf
+
+# Ignore folders
+AIRS/
