@@ -72,7 +72,7 @@ def find_rangedatetime(global_attributes):
 
     matches_date = [string for string in core_attributes_groups_strspace if re.match(date_pattern, string)][0]
     matches_time = [string for string in core_attributes_groups_strspace if re.match(time_pattern, string)][0]
-    print(matches_date, matches_time)
+    #print(matches_date, matches_time)
     # Find the PRODUCTIONDATETIME of the HDF file
     datetime_hdf_raw=f'{matches_date.split('=')[1].strip('"')}T{matches_time.split('=')[1].strip('"')}'
     return datetime_hdf_raw
@@ -90,7 +90,7 @@ def find_productiondatetime(global_attributes):
     # Search for strings that match the datetime pattern in the index
     # There should be only one match
     matches = [string for string in core_attributes_groups_strspace if re.match(datetime_pattern, string)][0]
-    print(matches)
+    #print(matches)
     # Find the PRODUCTIONDATETIME of the HDF file
     datetime_hdf_raw=matches.split('=')[1].strip('"')
             
