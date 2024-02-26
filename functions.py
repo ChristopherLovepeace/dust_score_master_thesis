@@ -92,9 +92,7 @@ def find_productiondatetime(global_attributes):
     matches = [string for string in core_attributes_groups_strspace if re.match(datetime_pattern, string)][0]
     #print(matches)
     # Find the PRODUCTIONDATETIME of the HDF file
-    datetime_hdf_raw=matches.split('=')[1].strip('"')
-            
-            
+    datetime_hdf_raw=matches.split('=')[1].strip('"')       
     return datetime_hdf_raw
 
 def match_coords(coords, array_to_match):
@@ -112,4 +110,6 @@ def create_mask(matched_coords):
         for j in range(len(matched_coords[0,:])):
             if np.all(matched_coords[i,j] == [True, True]):
                 mask[i,j]=[True]
+            else:
+                mask[i,j]=[False]
     return mask
