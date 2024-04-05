@@ -11,6 +11,29 @@ from matplotlib.colors import Normalize
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 #functions used in dust_score analysis
+import geopy
+from geopy.distance import great_circle
+from matplotlib.patches import Ellipse
+def distance(point1, point2):
+    """Calculate the distance between two geographical points in miles."""
+    #distance_miles=geodesic(point1, point2).miles
+    distance_miles=great_circle(point1, point2).miles
+    return distance_miles
+
+def points_inside_circle(center, radius, points):
+    """Find points inside the given circle."""
+    distances = np.array([distance(center, point) for point in points])
+    inside_points = points[distances <= radius]
+
+    return inside_points 
+def points_between_circles(center, inner_radius, outer_radius, points):
+    """Find points between two concentric circles."""
+    inner_points = points_inside_circle(center, inner_radius, points)
+    outer_points = points_inside_circle(center, outer_radius, points)
+    between_points = np.array([point for point in outer_points if point not in inner_points])
+
+    return between_points
+    
 
 def read_xlsx_tecq(file_name):
     """
@@ -95,13 +118,26 @@ def find_productiondatetime(global_attributes):
     datetime_hdf_raw=matches.split('=')[1].strip('"')       
     return datetime_hdf_raw
 
-def match_coords(coords, array_to_match):
+def match_coords(coords, array_to_match,tolerance):
     matched_coords=np.zeros((coords.shape[0],coords.shape[1],coords.shape[2]),bool)
     for i in range(len(coords[:])):
         for j in range(len(coords[0,:])):
-            matched_coords[i,j] = np.isclose(coords[i,j],array_to_match,rtol=0.05)
+            matched_coords[i,j] = np.isclose(coords[i,j],array_to_match,rtol=tolerance)
             if np.all(matched_coords[i,j] == [False, True]) or np.all(matched_coords[i,j] == [True, False]):
                 matched_coords[i,j]=[False, False]
+    return matched_coords
+
+def match_coords_circle(coords, circle_points):
+    matched_coords=np.zeros((coords.shape[0],coords.shape[1]),bool)
+    for i in range(len(coords[:])):
+        for j in range(len(coords[0,:])):
+            for point in circle_points:
+                if point[0] == coords[i,j][0] and point[1] == coords[i,j][1]:
+                    matched_coords[i,j] = [True]#np.any(coords[i,j],point)
+                else:
+                    matched_coords[i,j]=[False]
+            #if np.all(matched_coords[i,j] == [False, True]) or np.all(matched_coords[i,j] == [True, False]):
+            #    matched_coords[i,j]=[False, False]
     return matched_coords
     
 def create_mask(matched_coords):
@@ -113,3 +149,60 @@ def create_mask(matched_coords):
             else:
                 mask[i,j]=[False]
     return mask
+
+def draw_grid_plot(tecq_coords, coords, inside_points, file, datetime, dust_score, dist, plot_ellipse, wind_dir=None, center_windv=None, semi_major_axis=None, semi_minor_axis=None, between_points=None):
+    start_time=time.time()
+    # Create a map plot
+    fig = plt.figure(figsize=(10, 6))
+    ax = fig.add_subplot(1, 1, 1, projection=ccrs.PlateCarree())
+
+    lats=coords[:,:,0]
+    longs=coords[:,:,1]
+    
+    # Plot each coordinate on the map
+    sc = ax.scatter(longs, lats, c=dust_score, cmap='viridis', norm=Normalize(vmin=dust_score.min(), vmax=dust_score.max()), s=5, transform=ccrs.PlateCarree())
+    cbar = fig.colorbar(sc, ax=ax, orientation='vertical', shrink=0.7)
+    cbar.set_label('Dust_score')
+    
+    #print(inside_points[:,1], inside_points[:,0])
+    ax.plot(inside_points[:,1], inside_points[:,0], 'w.', markersize=1, transform=ccrs.PlateCarree())
+    if between_points!=None:
+        ax.plot(between_points[:,1], between_points[:,0], 'r.', markersize=1, transform=ccrs.PlateCarree())
+    '''
+    lats_masked=coords_masked[:,0]
+    longs_masked=coords_masked[:,1]
+    
+    #ax.plot(long, lat, 'go', markersize=1, transform=ccrs.PlateCarree())
+    ax.plot(longs_masked, lats_masked, 'r.', markersize=1, transform=ccrs.PlateCarree())
+    '''
+    ax.plot(tecq_coords[1],tecq_coords[0], 'bx', markersize=3, transform=ccrs.PlateCarree())
+    # Add gridlines and coastlines
+    ax.gridlines()
+    ax.coastlines()
+    # Add country borders
+    ax.add_feature(cfeature.BORDERS, linestyle=':', linewidth=1, edgecolor='black')
+    # Add state borders
+    ax.add_feature(cfeature.STATES, linestyle='-', linewidth=0.5, edgecolor='black')
+    # Add title and show the plot
+    plt.title(f'{datetime}, Distance to next focus: {dist}miles')
+    if plot_ellipse==True:
+        draw_helper_lines(ax, wind_dir, tecq_coords, center_windv, semi_major_axis, semi_minor_axis)
+
+    ax.set_extent([-115, -85, 15, 40], crs=ccrs.PlateCarree()) 
+    plt.show()
+    #plt.savefig(f'{os.path.join(file_path_plots,file)}.png')
+    end_time=time.time()
+    run_time=end_time-start_time
+    print(f"draw_grid_plot execution time: {run_time} msec")
+
+
+def draw_helper_lines(ax, wind_dir, center_cams, center_windv, semi_major_axis, semi_minor_axis):
+    print("Hello")
+    center_distance= distance(center_windv,center_cams)/2
+    lat_deg_change=geopy.units.degrees(arcminutes=geopy.units.nautical(miles=center_distance*np.sin(np.radians(wind_dir))))
+    long_deg_change=geopy.units.degrees(arcminutes=geopy.units.nautical(miles=center_distance*np.cos(np.radians(wind_dir))))
+    center_ellipse=[center_cams[0]+lat_deg_change,center_cams[1]+long_deg_change]
+    ellipse=Ellipse(xy=center_ellipse, width=semi_minor_axis, height=semi_major_axis, angle=wind_dir, edgecolor='r', fc='None', lw=2)
+    ax.add_patch(ellipse)
+    # Set aspect of the plot to 'equal' to make sure the ellipse is not distorted
+    ax.set_aspect('equal')
