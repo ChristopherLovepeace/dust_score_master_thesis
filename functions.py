@@ -113,7 +113,6 @@ def find_productiondatetime(global_attributes):
     # Search for strings that match the datetime pattern in the index
     # There should be only one match
     matches = [string for string in core_attributes_groups_strspace if re.match(datetime_pattern, string)][0]
-    #print(matches)
     # Find the PRODUCTIONDATETIME of the HDF file
     datetime_hdf_raw=matches.split('=')[1].strip('"')       
     return datetime_hdf_raw
@@ -127,17 +126,32 @@ def match_coords(coords, array_to_match,tolerance):
                 matched_coords[i,j]=[False, False]
     return matched_coords
 
-def match_coords_circle(coords, circle_points):
+def match_coords_circle_old(coords, circle_points):
     matched_coords=np.zeros((coords.shape[0],coords.shape[1]),bool)
     for i in range(len(coords[:])):
         for j in range(len(coords[0,:])):
             for point in circle_points:
                 if point[0] == coords[i,j][0] and point[1] == coords[i,j][1]:
-                    matched_coords[i,j] = [True]#np.any(coords[i,j],point)
+                    matched_coords[i,j] = [True]
                 else:
                     matched_coords[i,j]=[False]
-            #if np.all(matched_coords[i,j] == [False, True]) or np.all(matched_coords[i,j] == [True, False]):
-            #    matched_coords[i,j]=[False, False]
+
+    return matched_coords
+
+def match_coords_circle(coords, circle_points):
+    matched_coords = np.zeros(coords.shape, dtype=bool)
+    
+    # Extract x and y coordinates separately
+    x_coords, y_coords = coords[:,:,0], coords[:,:,1]
+    circle_x, circle_y = np.array(circle_points).T
+    # Create boolean masks for matching x and y coordinates
+    x_mask = np.isin(x_coords, circle_x)
+    y_mask = np.isin(y_coords, circle_y)
+    # Combine masks to find matching coordinates
+    matched_coords = np.logical_and(x_mask, y_mask)
+    #print(np.sum(matched_coords) == len(circle_points))
+    #print(matched_coords.shape)
+    
     return matched_coords
     
 def create_mask(matched_coords):
@@ -150,7 +164,7 @@ def create_mask(matched_coords):
                 mask[i,j]=[False]
     return mask
 
-def draw_grid_plot(tecq_coords, coords, inside_points, file, datetime, dust_score, dist, plot_ellipse, wind_dir=None, center_windv=None, semi_major_axis=None, semi_minor_axis=None, between_points=None):
+def draw_grid_plot(tecq_coords, coords, inside_points, file, datetime, dust_score, dist, plot_ellipse, wind_spd=None, wind_dir=None, center_windv=None, semi_major_axis=None, semi_minor_axis=None, between_points=None, vertices=None):
     start_time=time.time()
     # Create a map plot
     fig = plt.figure(figsize=(10, 6))
@@ -164,10 +178,11 @@ def draw_grid_plot(tecq_coords, coords, inside_points, file, datetime, dust_scor
     cbar = fig.colorbar(sc, ax=ax, orientation='vertical', shrink=0.7)
     cbar.set_label('Dust_score')
     
-    #print(inside_points[:,1], inside_points[:,0])
     ax.plot(inside_points[:,1], inside_points[:,0], 'w.', markersize=1, transform=ccrs.PlateCarree())
-    if between_points!=None:
+    if between_points is not None:
         ax.plot(between_points[:,1], between_points[:,0], 'r.', markersize=1, transform=ccrs.PlateCarree())
+    if vertices!=None:
+        ax.plot(vertices[:,1],vertices[:,0], 'bx', markersize=1, transform=ccrs.PlateCarree())
     '''
     lats_masked=coords_masked[:,0]
     longs_masked=coords_masked[:,1]
@@ -184,7 +199,10 @@ def draw_grid_plot(tecq_coords, coords, inside_points, file, datetime, dust_scor
     # Add state borders
     ax.add_feature(cfeature.STATES, linestyle='-', linewidth=0.5, edgecolor='black')
     # Add title and show the plot
-    plt.title(f'{datetime}, Distance to next focus: {dist}miles')
+    plt.title(f'Bihourly Wind Tracking, {datetime}')
+    plt.figtext(.75, .88, f'Wind dir={wind_dir}°')
+    plt.figtext(.75, .85, f'Wind spd={wind_spd}mph')
+    plt.figtext(.75, .82, f'Dist Vertices={dist}miles')
     if plot_ellipse==True:
         draw_helper_lines(ax, wind_dir, tecq_coords, center_windv, semi_major_axis, semi_minor_axis)
 
@@ -197,12 +215,14 @@ def draw_grid_plot(tecq_coords, coords, inside_points, file, datetime, dust_scor
 
 
 def draw_helper_lines(ax, wind_dir, center_cams, center_windv, semi_major_axis, semi_minor_axis):
-    print("Hello")
+    #ax.plot([center_cams[1],center_windv[1]],[center_cams[0],center_windv[0]], color='blue', linewidth=1, alpha=0.5, transform=ccrs.PlateCarree())
+    #plot horizontal line
+    #ax.plot([center_cams[1],0],[center_cams[0],center_cams[0]], color='red', linewidth=1, transform=ccrs.PlateCarree())
     center_distance= distance(center_windv,center_cams)/2
-    lat_deg_change=geopy.units.degrees(arcminutes=geopy.units.nautical(miles=center_distance*np.sin(np.radians(wind_dir))))
-    long_deg_change=geopy.units.degrees(arcminutes=geopy.units.nautical(miles=center_distance*np.cos(np.radians(wind_dir))))
-    center_ellipse=[center_cams[0]+lat_deg_change,center_cams[1]+long_deg_change]
-    ellipse=Ellipse(xy=center_ellipse, width=semi_minor_axis, height=semi_major_axis, angle=wind_dir, edgecolor='r', fc='None', lw=2)
-    ax.add_patch(ellipse)
+    #lat_deg_change=geopy.units.degrees(arcminutes=geopy.units.nautical(miles=center_distance*np.sin(np.radians(wind_dir))))
+    #long_deg_change=geopy.units.degrees(arcminutes=geopy.units.nautical(miles=center_distance*np.cos(np.radians(wind_dir))))
+    #center_ellipse=[center_cams[0]+lat_deg_change,center_cams[1]+long_deg_change]
+    #ellipse=Ellipse(xy=center_ellipse, width=semi_minor_axis, height=semi_major_axis, angle=wind_dir, edgecolor='r', fc='None', lw=2)
+    #ax.add_patch(ellipse)
     # Set aspect of the plot to 'equal' to make sure the ellipse is not distorted
-    ax.set_aspect('equal')
+    #ax.set_aspect('equal')
