@@ -5,6 +5,9 @@ import pandas as pd
 from datetime import datetime, time, timedelta
 import re
 import time
+import math
+from statistics import mode
+from scipy.stats import pearsonr, mode
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 
@@ -199,7 +202,7 @@ def draw_grid_plot(tecq_coords, coords, inside_points, file, datetime, dust_scor
     # Add state borders
     ax.add_feature(cfeature.STATES, linestyle='-', linewidth=0.5, edgecolor='black')
     # Add title and show the plot
-    plt.title(f'Bihourly Wind Tracking, {datetime}')
+    plt.title(f'Hourly Wind Tracking, {datetime}')
     plt.figtext(.75, .88, f'Wind dir={wind_dir}°')
     plt.figtext(.75, .85, f'Wind spd={wind_spd}mph')
     plt.figtext(.75, .82, f'Dist Vertices={dist}miles')
@@ -226,3 +229,39 @@ def draw_helper_lines(ax, wind_dir, center_cams, center_windv, semi_major_axis, 
     #ax.add_patch(ellipse)
     # Set aspect of the plot to 'equal' to make sure the ellipse is not distorted
     #ax.set_aspect('equal')
+
+def mode_float(data, num_bins):
+    # Create histogram bins
+    bins = np.linspace(np.min(data), np.max(data), num_bins)
+    # Digitize the data into bins
+    bin_indices = np.digitize(data, bins)
+    # Find mode bin index
+    mode_bin_index = mode(bin_indices).mode
+    mode_value=data[mode_bin_index]
+    # Calculate the mode value within the mode bin
+    #mode_value = (bins[mode_bin_index] + bins[mode_bin_index + 1]) / 2
+    
+    # Count occurrences in the mode bin
+    mode_frequency = np.sum(bin_indices == mode_bin_index)
+
+    return mode_value, mode_frequency
+
+def interpolate_gaps(values, limit=None):
+    if np.all(np.isnan(values))==True:
+        return values
+    """
+    Fill gaps using linear interpolation, optionally only fill gaps up to a
+    size of `limit`.
+    """
+    values = np.asarray(values)
+    i = np.arange(values.size)
+    valid = np.isfinite(values)
+    filled = np.interp(i, i[valid], values[valid])
+
+    if limit is not None:
+        invalid = ~valid
+        for n in range(1, limit+1):
+            invalid[:-n] &= invalid[n:]
+        filled[invalid] = np.nan
+
+    return filled
