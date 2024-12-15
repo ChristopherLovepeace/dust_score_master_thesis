@@ -1,6 +1,6 @@
 import sys, os
 import numpy as np
-from pyhdf.SD import SD
+#from pyhdf.SD import SD
 import pandas as pd
 from datetime import datetime, time, timedelta
 import re
@@ -17,6 +17,57 @@ import cartopy.feature as cfeature
 import geopy
 from geopy.distance import great_circle
 from matplotlib.patches import Ellipse
+def normalize(data_array):
+    '''Normalize a data array'''
+    data_norm = (data_array - np.nanmin(data_array)) / (np.nanmax(data_array) - np.nanmin(data_array))
+    return data_norm
+
+def get_daily_mean(pm_dust_df):
+    df_copy=pm_dust_df.copy(deep=True)
+    df_copy['Daily']=0.
+    
+    for i in range(len(df_copy)):
+        df_copy.iloc[i,24]=np.nanmean(df_copy.iloc[i,0:24])
+    return df_copy
+
+def get_monthly_mean(pm_dust_dailymean_df):
+    daily_means=[]
+    for month in range(1,13):
+        daily_means=np.append(daily_means,pm_dust_dailymean_df[pm_dust_dailymean_df.index.month == month]['Daily'].mean())
+    return daily_means
+    
+def get_iqr(array):
+    q75, q25 = np.percentile(array, [75 ,25])
+    return q25, q75
+def get_percentiles(array):
+    '''
+    Returns the 10th, 50th and 90th percentiles
+    '''
+    return [np.percentile(array,10),np.percentile(array,50),np.percentile(array,90)]
+
+def shorten_array(array):
+    # Initialize a new array with the first element (always kept)
+    result = [array[0]]
+    
+    # Iterate through the array, comparing each element with the next
+    for i in range(len(array) - 1):  # Stop before the last element
+        current = array[i]
+        next_elem = array[i + 1]
+        
+        # Calculate the absolute difference between the two numbers
+        if abs(current - next_elem) > 5:
+            result.append(next_elem)
+    
+    return result
+def get_ecdf_steps(ecdf_values,x_values):
+    jumps = normalize(np.diff(ecdf_values))
+    percentile=75
+    dynamic_threshold = np.percentile(jumps, percentile)
+    # Find the major jumps based on the threshold
+    jump_indices = np.where(jumps > dynamic_threshold)[0]
+    jump_points = x_values[jump_indices]
+    return np.unique(jump_points.round())
+
 def distance(point1, point2):
     """Calculate the distance between two geographical points in miles."""
     #distance_miles=geodesic(point1, point2).miles
@@ -84,7 +135,7 @@ def round_nearest_hour(datetime_obj):
     else:
         datetime_obj = start_hour
     return datetime_obj
-
+'''
 def find_rangedatetime(global_attributes):
     #RANGEENDINGDATE  "2019-01-01"
     #RANGEENDINGTIME  "20:53:20.999999Z"
@@ -102,7 +153,7 @@ def find_rangedatetime(global_attributes):
     # Find the PRODUCTIONDATETIME of the HDF file
     datetime_hdf_raw=f'{matches_date.split('=')[1].strip('"')}T{matches_time.split('=')[1].strip('"')}'
     return datetime_hdf_raw
-
+'''
 #PRODUCTIONDATETIME IS NOT A GOOD MEASURE FOR WHEN DATA IS FIRST CAPTURED
 def find_productiondatetime(global_attributes):
     # Regex for PRODUCTIONDATETIME YYYY-MM-DD pattern
